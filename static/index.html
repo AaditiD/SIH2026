@@ -1,0 +1,64 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PRAHARI</title>
+<style>
+body{font:14px system-ui,sans-serif;margin:0;background:#f4f5f7;color:#1f2933}
+header{background:#1f2933;color:#fff;padding:10px 20px;display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+header h1{font-size:18px;margin:0;color:#f5a623}
+nav button{background:none;border:0;color:#bbb;padding:8px 12px;cursor:pointer;font-size:14px}nav button.on{color:#fff;border-bottom:2px solid #f5a623}
+main{max-width:1000px;margin:16px auto;padding:0 12px}
+.card{background:#fff;border:1px solid #d9dce0;border-radius:8px;padding:14px;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.score{font-size:34px;font-weight:700}.score small{font-size:12px;font-weight:400;color:#666}
+input,select,textarea{font:inherit;padding:6px 8px;margin:3px 0;width:100%;box-sizing:border-box}
+button.b{font:inherit;padding:6px 12px;background:#1f2933;color:#fff;border:0;border-radius:6px;cursor:pointer;margin:3px 6px 3px 0}
+table{width:100%;border-collapse:collapse}td,th{padding:6px;border-bottom:1px solid #eee;text-align:left;vertical-align:top}
+.tag{padding:2px 8px;border-radius:10px;font-size:12px;background:#eee}.critical{background:#fbd5d5}.high{background:#fde4c4}.medium{background:#fff3c4}
+.bar{height:8px;background:#eee;border-radius:4px}.bar i{display:block;height:8px;border-radius:4px}.warn{color:#b42318}
+
+header{border-bottom:3px solid #f5a623}.ok{color:#2e7d32}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:12px}
+.kpi{margin:0;text-align:center}.kpi small{color:#666}.kpi div{font-size:26px;font-weight:700}
+.row{display:grid;grid-template-columns:1.3fr 1fr;gap:12px}@media(max-width:800px){.row{grid-template-columns:1fr}}
+#map{height:290px;border-radius:6px;margin-top:8px;background:#e8eaed}
+.sev{display:flex;align-items:center;gap:8px;margin:6px 0}.sev span{width:60px;text-transform:capitalize}.sev .bar{flex:1}
+.bar i.critical{background:#c62828}.bar i.high{background:#ef8a17}.bar i.medium{background:#f5c518}.bar i.low{background:#8aa1b1}
+.lad{display:flex;gap:8px;margin-top:8px}.lad div{flex:1;text-align:center;padding:8px 2px;border-radius:6px;background:#eef0f2}.lad b{display:block;font-size:20px}.lad small{font-size:11px}.lad .hot{background:#fbd5d5}
+.donut{width:70px;height:70px;border-radius:50%;display:grid;place-items:center;float:right}.donut span{background:#fff;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:18px}
+.chip{display:inline-block;background:#eef0f2;border-radius:12px;padding:3px 10px;margin:2px 4px 2px 0;font-size:12px;cursor:pointer}
+</style><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script></head><body>
+<header><h1>PRAHARI</h1><span>Mine compliance &amp; risk intelligence</span>
+<select id="role" onchange="show('dash')" style="width:auto"><option value="">Ministry: all mines</option><option value="?company=BCCL">Subsidiary: BCCL</option><option value="?company=MCL">Subsidiary: MCL</option><option value="?company=SECL">Subsidiary: SECL</option><option value="?mine_id=1">Mine manager: Jharia</option><option value="?mine_id=2">Mine manager: Talcher</option><option value="?mine_id=3">Mine manager: Korba</option></select><nav><button id="t-dash" onclick="show('dash')">Dashboard</button><button id="t-field" onclick="show('field')">Field app</button><button id="t-cases" onclick="show('cases')">Cases</button><button id="t-audit" onclick="show('audit')">Audit log</button></nav></header>
+<main><div id="v-dash"></div><div id="v-field"></div><div id="v-cases"></div><div id="v-audit"></div></main>
+<script>
+const $=s=>document.querySelector(s);let mines=[],photo=null;
+const api=(p,o)=>fetch('/api'+p,o&&{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)}).then(r=>{if(!r.ok)throw new Error('server '+r.status);return r.json()});
+const SAMPLES=['Methane reading high near panel 3, ventilation fan not running','Roof crack and missing support props in gallery','Electrical cable damaged, earthing missing at pump','Fire smoke seen near coal stack, extinguisher empty','Haul road slope unstable, dumper near bench edge'];
+const uid=()=>(crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random());
+const col=s=>s>=75?'#2e7d32':s>=50?'#f5a623':'#c62828';
+function show(n){for(const v of['dash','field','cases','audit']){$('#v-'+v).style.display=v==n?'block':'none';$('#t-'+v).className=v==n?'on':''}({dash:dash,field:fieldInit,cases:cases,audit:audit})[n]().catch(e=>{$('#v-'+n).innerHTML='<div class="card warn">Could not load: '+e.message+'</div>'})}
+async function dash(){const d=await api('/dashboard'+($('#role').value||'')),k=d.kpi,mx=Math.max(1,...Object.values(d.severity)),LD=['Officer','Mine Manager','GM','Corporate'];
+$('#v-dash').innerHTML=`<div class="kpis">${[['Avg health',k.avg+'/100',col(k.avg)],['Inspections',k.inspections,''],['Evidence verified',k.verified+'%',col(k.verified)],['Open cases',k.open,''],['Overdue',k.overdue,k.overdue?'#c62828':''],['Closed',k.closed,'#2e7d32']].map(x=>`<div class="card kpi"><small>${x[0]}</small><div style="color:${x[2]}">${x[1]}</div></div>`).join('')}</div>
+<div class="row"><div class="card"><b>Mine locations and health</b><div id="map"></div></div><div><div class="card"><b>Open cases by severity</b>${Object.entries(d.severity).map(([s,n])=>`<div class="sev"><span>${s}</span><div class="bar"><i class="${s}" style="width:${n/mx*100}%"></i></div><b>${n}</b></div>`).join('')}</div>
+<div class="card"><b>Escalation ladder (open cases)</b><div class="lad">${d.ladder.map((n,i)=>`<div class="${i&&n?'hot':''}"><b>${n}</b><small>${LD[i]}</small></div>`).join('')}</div></div>
+<div class="card">Audit chain: <b class="${d.audit_ok?'ok':'warn'}">${d.audit_ok?'intact':'TAMPERED'}</b><br><button class="b" onclick="ff()">Fast-forward 5 days</button><button class="b" onclick="reset()">Reset demo</button></div></div></div>
+<div class="grid">${d.mines.map(m=>`<div class="card"><div class="donut" style="background:conic-gradient(${col(m.score)} ${m.score*3.6}deg,#eee 0)"><span>${m.score}</span></div><b>${m.name}</b> <span class="tag">${m.company}</span><p>Compliance Health Index<br>Open: ${m.open} &middot; Overdue: ${m.overdue}</p>${m.factors.length?'<b>Why the score dropped</b><ul>'+m.factors.map(f=>`<li>${f.label}: -${f.points}</li>`).join('')+'</ul>':'<p>No risk factors.</p>'}</div>`).join('')}</div>
+<div class="card"><b>Contractor risk cascade</b><table>${d.contractors.map(x=>`<tr><td>${x.name}<td>${x.cases} open cases in ${x.mines} mines<td>-${x.points} pts</tr>`).join('')}</table><small>A contractor's open issues at other mines also lower this mine's score.</small></div><div class="card" id="sat"></div><div class="card"><b>Recent activity</b><ul>${d.recent.map(a=>`<li>${a.ts.slice(11,19)} &middot; ${a.event}</li>`).join('')||'<li>No activity yet</li>'}</ul></div>`;
+if(window.L){const mp=L.map('map').setView([22.3,84.4],6);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'OpenStreetMap'}).addTo(mp);d.mines.forEach(m=>L.circleMarker([m.lat,m.lng],{radius:14,color:col(m.score),fillColor:col(m.score),fillOpacity:.6}).addTo(mp).bindPopup(`<b>${m.name}</b><br>Health ${m.score}`))}else $('#map').textContent='Map needs internet access';$('#sat').innerHTML='<b>Satellite cross-check (Sentinel-2, demo data)</b>';for(const m of d.mines){const s=await api('/satellite/'+m.id);if(s.applicable)$('#sat').innerHTML+=`<p>${m.name}: reported ${s.reported_ha} ha reclaimed, satellite sees ${s.detected_ha} ha ${s.mismatch?'<b class="warn">mismatch, inspect site</b>':'<b class="ok">consistent</b>'}</p>`}}
+async function ff(){await api('/demo/fastforward',{days:5});dash()}
+async function reset(){await api('/demo/reset',{});localStorage.removeItem('q');dash()}
+async function fieldInit(){mines=await api('/mines');const q=JSON.parse(localStorage.getItem('q')||'[]');
+$('#v-field').innerHTML=`<div class="card"><h3>Field inspection</h3><select id="mine" onchange="place(0)">${mines.map(m=>`<option value=${m.id}>${m.name}</option>`).join('')}</select><input id="insp" value="Inspector A"><select id="con"><option>Apex Mining Services<option>Bharat Earthmovers<option>Own workforce</select><textarea id="note" rows=3 placeholder="Observation, e.g. Methane reading high near panel 3, ventilation fan not running"></textarea><div>Try a sample: ${SAMPLES.map((s,i)=>`<span class="chip" onclick="$('#note').value=SAMPLES[${i}]">${s.slice(0,26)}...</span>`).join('')}</div><button class="b" onclick="suggest()">AI: suggest clause</button><div id="sug"></div><div class="grid"><input id="lat" placeholder="Latitude"><input id="lng" placeholder="Longitude"></div><button class="b" onclick="place(0)">Place me at mine</button><button class="b" onclick="place(0.5)">Place me ~50 km away</button><input type="file" id="ph" accept="image/*" onchange="pick(this)"><label><input type="checkbox" id="off" style="width:auto"> Simulate offline (queue locally)</label><br><button class="b" onclick="submit()">Submit inspection</button><button class="b" onclick="sync()">Sync queue (<span id="qn">${q.length}</span>)</button><div id="res"></div></div>`;place(0)}
+function place(d){const m=mines.find(x=>x.id==$('#mine').value);$('#lat').value=(m.lat+d).toFixed(5);$('#lng').value=(m.lng+(d||0.002*Math.random())).toFixed(5)}
+function pick(i){const f=i.files[0];if(!f)return;const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=320;c.height=Math.round(320*im.height/im.width);c.getContext('2d').drawImage(im,0,0,c.width,c.height);photo=c.toDataURL('image/jpeg',.7).split(',')[1]};im.src=URL.createObjectURL(f)}
+async function suggest(){const s=await api('/assist',{note:$('#note').value});$('#sug').innerHTML=s.hazard?`<p><b>${s.clause}</b><br>Severity: ${s.severity} &middot; Cause: ${s.cause}<br>Action: ${s.action}</p>`:'<p>No statutory match found.</p>'}
+const fmt=r=>r.duplicate_submission?'<p>Already synced earlier.</p>':`<div class="card"><b>Evidence: ${r.evidence_ok?'verified':'<span class="warn">flagged</span>'}</b><ul>${r.flags.map(f=>`<li class="warn">${f}</li>`).join('')}</ul>${r.suggestion.hazard?`<p>${r.suggestion.clause}<br>Severity: ${r.suggestion.severity}<br>Action: ${r.suggestion.action}</p>`:'<p>No hazard matched.</p>'}${r.case_id?`<p>Case #${r.case_id} opened.</p>`:''}</div>`;
+function enq(p){const q=JSON.parse(localStorage.getItem('q')||'[]');q.push(p);localStorage.setItem('q',JSON.stringify(q));$('#qn').textContent=q.length;$('#res').innerHTML='<div class="card">Saved offline. Press Sync when the network is back.</div>'}
+async function submit(){const p={client_id:uid(),mine_id:+$('#mine').value,inspector:$('#insp').value,note:$('#note').value,lat:+$('#lat').value,lng:+$('#lng').value,captured_at:new Date().toISOString(),photo_b64:photo,contractor:$('#con').value};
+if($('#off').checked){enq(p);return}try{$('#res').innerHTML=fmt(await api('/inspections',p))}catch(e){enq(p)}}
+async function sync(){const q=JSON.parse(localStorage.getItem('q')||'[]'),left=[];let out='';for(const p of q){try{out+=fmt(await api('/inspections',p))}catch(e){left.push(p)}}localStorage.setItem('q',JSON.stringify(left));$('#qn').textContent=left.length;$('#res').innerHTML=out||'Nothing to sync.'}
+async function cases(){const c=await api('/cases'),L=['Officer','Mine Manager','GM','Corporate'];
+$('#v-cases').innerHTML=`<div class="card"><table><tr><th>#<th>Mine<th>Issue<th>Severity<th>Due<th>Status<th>With<th></tr>${c.map(x=>`<tr><td>${x.id}<td>${x.mine}<td>${x.title}<br><small>${x.clause}</small><td><span class="tag ${x.severity}">${x.severity}</span><td>${x.due.slice(0,10)}<td>${x.status}<td>${L[x.level]}${x.level?' (escalated)':''}<td>${x.status=='open'?`<button class="b" onclick="act(${x.id})">Mark fixed</button>`:x.status=='action_done'?`<button class="b" onclick="ver(${x.id},1)">Approve</button><button class="b" onclick="ver(${x.id},0)">Reject</button>`:''}</tr>`).join('')}</table></div>`}
+async function act(i){await api('/cases/'+i+'/action',{});cases()}
+async function ver(i,a){await api('/cases/'+i+'/verify',{approve:!!a});cases()}
+async function audit(){const a=await api('/audit');$('#v-audit').innerHTML='<div class="card"><table>'+a.map(x=>`<tr><td>${x.id}<td>${x.ts.slice(0,19)}<td>${x.event}<td><code>${x.hash.slice(0,12)}</code></tr>`).join('')+'</table></div>'}
+show('dash');
+</script></body></html>
